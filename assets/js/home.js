@@ -1,4 +1,3 @@
-
 (() => {
   const cfg = window.RSI_CONFIG;
   if(!cfg) return;
@@ -17,14 +16,14 @@
   const scenes = cfg.scenes;
   let activeIndex = -1;
   let raf = 0;
-
-  // Estado de sincronización vídeo/scroll.
-  // Evita lanzar muchos seeks simultáneos, algo que en Chrome puede dejar
-  // congelado el fotograma aunque la barra de progreso siga avanzando.
-  let targetTime = 0;
-  let seekPending = false;
   let videoReady = false;
-  const SEEK_EPSILON = 0.06;
+  let targetTime = 0;
+  let lastSeekAt = 0;
+
+  // Limitamos la frecuencia de seek para no saturar el decodificador,
+  // pero NO bloqueamos futuros seeks esperando un evento seeked.
+  const SEEK_INTERVAL = 45; // ms
+  const SEEK_EPSILON = 0.04;
 
   scenes.forEach((_,i)=>{
     const dot=document.createElement('span');
@@ -34,6 +33,7 @@
   const dots=[...rail.children];
 
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
   function getProgress(){
     const max=Math.max(1,document.documentElement.scrollHeight-innerHeight);
     return clamp(scrollY/max,0,1);
@@ -69,7 +69,10 @@
 
   function renderCard(p){
     const idx=scenes.findIndex(s=>p>=s.start && p<s.end);
-    if(idx<0){card.classList.remove('visible');return;}
+    if(idx<0){
+      card.classList.remove('visible');
+      return;
+    }
 
     const s=scenes[idx];
     if(idx!==activeIndex){
@@ -90,37 +93,39 @@
     card.classList.add('visible');
   }
 
-  function performSeek(){
+  function seekVideo(now = performance.now()){
     if(!video || !videoReady) return;
+    if(video.readyState < 2) return;
     if(!Number.isFinite(video.duration) || video.duration<=0) return;
-    if(video.seeking || seekPending) return;
 
-    const t = clamp(targetTime, 0, Math.max(0, video.duration - 0.001));
-    if(Math.abs(video.currentTime - t) <= SEEK_EPSILON) return;
+    const t = clamp(targetTime,0,Math.max(0,video.duration-0.001));
+    if(Math.abs(video.currentTime-t) <= SEEK_EPSILON) return;
+    if(now-lastSeekAt < SEEK_INTERVAL) return;
 
-    seekPending = true;
+    lastSeekAt = now;
     try{
       video.currentTime = t;
-    }catch(_){
-      seekPending = false;
+    }catch(err){
+      console.warn('RSI: seek de vídeo pendiente', err);
     }
   }
 
-  function syncVideo(p){
+  function syncVideo(p, now){
     if(!video || !videoReady) return;
     if(!Number.isFinite(video.duration) || video.duration<=0) return;
 
     targetTime = clamp(p,0,1) * video.duration;
-    performSeek();
+    seekVideo(now);
   }
 
-  function render(){
+  function render(now = performance.now()){
     raf=0;
     const p=getProgress();
+
     progress.style.width=(p*100)+'%';
     cue.style.opacity=String(clamp(1-p*9,0,1));
     renderCard(p);
-    syncVideo(p);
+    syncVideo(p,now);
   }
 
   function requestRender(){
@@ -134,39 +139,32 @@
   },{passive:true});
 
   if(video){
-    // Nos aseguramos de trabajar siempre en pausa; el vídeo solo cambia
-    // de fotograma mediante el scroll.
     video.pause();
+    video.preload='auto';
 
-    video.addEventListener('loadedmetadata',()=>{
-      videoReady = true;
-      targetTime = getProgress() * video.duration;
-      performSeek();
+    // loadeddata confirma que ya existe al menos un fotograma decodificable.
+    const markReady=()=>{
+      if(!Number.isFinite(video.duration) || video.duration<=0) return;
+      videoReady=true;
+      targetTime=getProgress()*video.duration;
       requestRender();
-    });
+    };
 
-    video.addEventListener('canplay',()=>{
-      videoReady = true;
-      performSeek();
-      requestRender();
+    video.addEventListener('loadeddata',markReady);
+    video.addEventListener('canplay',markReady);
+    video.addEventListener('durationchange',()=>{
+      if(Number.isFinite(video.duration) && video.duration>0) markReady();
     });
-
-    video.addEventListener('seeked',()=>{
-      seekPending = false;
-      // Si el usuario siguió desplazándose mientras el navegador buscaba
-      // el fotograma anterior, saltamos ahora al objetivo más reciente.
-      if(Math.abs(video.currentTime-targetTime) > SEEK_EPSILON){
-        requestAnimationFrame(performSeek);
-      }
-    });
-
     video.addEventListener('error',()=>{
-      console.error('RSI: no se pudo cargar el vídeo del recorrido.');
+      console.error('RSI: no se pudo cargar el vídeo del recorrido.', video.error);
     });
 
-    // Si metadata ya estaba disponible cuando se ejecutó el script.
-    if(video.readyState >= 1 && Number.isFinite(video.duration)){
-      videoReady = true;
+    // Si el navegador ya había cargado el vídeo antes de ejecutar el script.
+    if(video.readyState>=2 && Number.isFinite(video.duration) && video.duration>0){
+      markReady();
+    }else{
+      // Reafirma la carga del MP4 sin reproducirlo.
+      try{ video.load(); }catch(_){}
     }
   }
 
