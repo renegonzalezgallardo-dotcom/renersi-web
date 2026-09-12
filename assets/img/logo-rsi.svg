@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 72">
+<rect width="240" height="72" rx="14" fill="#0d0f12"/>
+<rect x="1" y="1" width="238" height="70" rx="13" fill="none" stroke="#ffffff" stroke-opacity=".20"/>
+<text x="26" y="45" fill="#ffffff" font-family="Arial,Helvetica,sans-serif" font-size="32" font-weight="800" letter-spacing="3">RSI</text>
+<text x="104" y="29" fill="#ffffff" font-family="Arial,Helvetica,sans-serif" font-size="10" font-weight="700" letter-spacing="1.2">SOLUCIONES</text>
+<text x="104" y="45" fill="#ffffff" font-family="Arial,Helvetica,sans-serif" font-size="10" font-weight="700" letter-spacing="1.2">INTEGRALES</text>
+</svg>
