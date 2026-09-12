@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>RSI · Soluciones Integrales Barcelona</title>
+<meta name="description" content="Reformas integrales, instalaciones, cocinas, baños e intervención exterior en Barcelona.">
+<link rel="icon" type="image/svg+xml" href="assets/img/favicon-rsi.svg">
+<link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body class="home">
+
+<header class="site-header">
+  <!-- ============================================================
+       LOGO RSI
+       Para cambiarlo en el futuro:
+       reemplaza assets/img/logo-rsi.svg por tu logo final
+       conservando el mismo nombre.
+       Al hacer clic SIEMPRE vuelve a Inicio, como solicitaste.
+       ============================================================ -->
+  <a class="home-link" href="index.html" aria-label="RSI · Ir al inicio">
+    <img class="brand-logo" src="assets/img/logo-rsi.svg" alt="RSI Soluciones Integrales">
+  </a>
+
+  <button class="menu-toggle" type="button" aria-expanded="false" aria-label="Abrir menú">MENÚ</button>
+
+  <nav class="main-nav" aria-label="Navegación principal">
+    <a href="index.html" aria-current="page">Inicio</a><a href="servicios.html">Servicios</a><a href="proyectos.html">Proyectos</a><a href="sobre-rsi.html">Sobre RSI</a><a href="contacto.html">Contacto</a>
+  </nav>
+
+  <a class="header-cta" href="contacto.html">SOLICITAR VALORACIÓN</a>
+</header>
+
+
+<main class="stage" aria-label="Recorrido inmersivo RSI">
+  <!-- Portada extraída del fotograma 0 exacto del vídeo. -->
+  <picture>
+    <img class="poster" src="assets/img/poster-recorrido.webp" alt="Barcelona">
+  </picture>
+
+  <!-- ============================================================
+       VÍDEO KLING FINAL
+       1) descarga el MP4 final
+       2) renómbralo EXACTAMENTE: recorrido.mp4
+       3) colócalo en: assets/video/
+       4) NO modificar HTML ni JavaScript
+       ============================================================ -->
+  <video id="scrollVideo" muted playsinline preload="auto"
+         poster="assets/img/poster-recorrido.webp"
+         aria-label="Recorrido inmersivo de RSI por Barcelona y una vivienda reformada">
+    <source src="assets/video/recorrido.mp4" type="video/mp4">
+  </video>
+</main>
+
+<!-- ===============================================================
+     ESTE ÚNICO CUADRO SE REUTILIZA EN TODAS LAS ESCENAS.
+     TEXTOS, ENLACES Y POSICIONES NO SE EDITAN AQUÍ:
+     editar assets/js/config.js
+     =============================================================== -->
+<section id="storyCard" class="story-card" aria-live="polite">
+  <span class="eyebrow" id="cardEyebrow"></span>
+  <h1 id="cardTitle"></h1>
+  <p id="cardText"></p>
+  <div class="card-actions">
+    <a id="cardPrimary" class="card-cta" href="#">Ver más</a>
+    <a id="cardSecondary" class="card-secondary" href="#">Contactar</a>
+  </div>
+</section>
+
+<nav class="scene-rail" id="sceneRail" aria-label="Progreso del recorrido"></nav>
+<div class="scroll-cue" id="scrollCue">DESPLÁZATE PARA RECORRER ↓</div>
+<div class="progress" id="progress"></div>
+
+<!-- ============================================================
+     NOTAS DE DESARROLLO · NO VISIBLES EN LA WEB
+     - Textos, botones y posiciones Home: assets/js/config.js
+     - Logo final: assets/img/logo-rsi.svg
+     - Favicon final: assets/img/favicon-rsi.svg
+     - Vídeo final: assets/video/recorrido.mp4
+     ============================================================ -->
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/main.js"></script>
+<script src="assets/js/home.js"></script>
+</body>
+</html>
