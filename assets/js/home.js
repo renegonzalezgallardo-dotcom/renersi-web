@@ -17,7 +17,14 @@
   const scenes = cfg.scenes;
   let activeIndex = -1;
   let raf = 0;
+
+  // Estado de sincronización vídeo/scroll.
+  // Evita lanzar muchos seeks simultáneos, algo que en Chrome puede dejar
+  // congelado el fotograma aunque la barra de progreso siga avanzando.
   let targetTime = 0;
+  let seekPending = false;
+  let videoReady = false;
+  const SEEK_EPSILON = 0.06;
 
   scenes.forEach((_,i)=>{
     const dot=document.createElement('span');
@@ -51,8 +58,6 @@
       card.style.transform='translateY(-50%)';
     }
 
-    // MÓVIL:
-    // Evitamos posiciones extremas y mantenemos el cuadro legible.
     if(innerWidth<=760){
       card.style.left='14px';
       card.style.right='auto';
@@ -85,14 +90,28 @@
     card.classList.add('visible');
   }
 
-  function syncVideo(p){
-    if(p <= 0.001) return;
-    if(!video || !Number.isFinite(video.duration) || video.duration<=0) return;
-    targetTime=p*video.duration;
-    // La asignación directa facilita que el vídeo avance/retroceda con el scroll.
-    if(Math.abs(video.currentTime-targetTime)>.025){
-      video.currentTime=targetTime;
+  function performSeek(){
+    if(!video || !videoReady) return;
+    if(!Number.isFinite(video.duration) || video.duration<=0) return;
+    if(video.seeking || seekPending) return;
+
+    const t = clamp(targetTime, 0, Math.max(0, video.duration - 0.001));
+    if(Math.abs(video.currentTime - t) <= SEEK_EPSILON) return;
+
+    seekPending = true;
+    try{
+      video.currentTime = t;
+    }catch(_){
+      seekPending = false;
     }
+  }
+
+  function syncVideo(p){
+    if(!video || !videoReady) return;
+    if(!Number.isFinite(video.duration) || video.duration<=0) return;
+
+    targetTime = clamp(p,0,1) * video.duration;
+    performSeek();
   }
 
   function render(){
@@ -114,8 +133,42 @@
     requestRender();
   },{passive:true});
 
-  video?.addEventListener('loadedmetadata',requestRender);
-  video?.addEventListener('canplay',requestRender);
+  if(video){
+    // Nos aseguramos de trabajar siempre en pausa; el vídeo solo cambia
+    // de fotograma mediante el scroll.
+    video.pause();
+
+    video.addEventListener('loadedmetadata',()=>{
+      videoReady = true;
+      targetTime = getProgress() * video.duration;
+      performSeek();
+      requestRender();
+    });
+
+    video.addEventListener('canplay',()=>{
+      videoReady = true;
+      performSeek();
+      requestRender();
+    });
+
+    video.addEventListener('seeked',()=>{
+      seekPending = false;
+      // Si el usuario siguió desplazándose mientras el navegador buscaba
+      // el fotograma anterior, saltamos ahora al objetivo más reciente.
+      if(Math.abs(video.currentTime-targetTime) > SEEK_EPSILON){
+        requestAnimationFrame(performSeek);
+      }
+    });
+
+    video.addEventListener('error',()=>{
+      console.error('RSI: no se pudo cargar el vídeo del recorrido.');
+    });
+
+    // Si metadata ya estaba disponible cuando se ejecutó el script.
+    if(video.readyState >= 1 && Number.isFinite(video.duration)){
+      videoReady = true;
+    }
+  }
 
   render();
 })();
