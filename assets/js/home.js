@@ -25,13 +25,14 @@
   let targetTime = 0;
   let lastBackSeek = 0;
 
-  // Estrategia V2:
-  // - hacia delante: reproducción real y velocidad variable (sin seeks continuos)
-  // - hacia atrás: seeks limitados, solo cuando hace falta
-  // Esto evita congelar el decodificador en primera carga, especialmente en móvil.
+  // Estrategia V3:
+  // - hacia delante: reproducción real y velocidad variable
+  // - hacia atrás: retroceso escalonado y estable, alineado con GOP/keyframes
+  //   para evitar saltos caóticos del decodificador en Chrome/móvil.
   const FORWARD_TOLERANCE = 0.10;
-  const BACKWARD_TOLERANCE = 0.18;
-  const BACK_SEEK_INTERVAL = 120; // ms
+  const BACKWARD_TOLERANCE = 0.20;
+  const BACK_SEEK_INTERVAL = 170; // ms
+  const BACK_STEP = 0.50; // s; coincide con la cadencia de keyframes del MP4 optimizado
 
   scenes.forEach((_,i)=>{
     const dot=document.createElement('span');
@@ -124,13 +125,29 @@
       return;
     }
 
-    // Objetivo por detrás: retroceso mediante seeks espaciados.
+    // Objetivo por detrás: no intentamos "reproducir al revés".
+    // Retrocedemos de forma deliberada en pasos de 0,5 s, lo que resulta
+    // visualmente mucho más estable que lanzar seeks continuos.
     if(diff < -BACKWARD_TOLERANCE){
       stopPlayback();
+
       if(now-lastBackSeek >= BACK_SEEK_INTERVAL && !video.seeking){
         lastBackSeek=now;
-        try{ video.currentTime=target; }catch(_){}
+
+        const nextRaw=Math.max(target, video.currentTime-BACK_STEP);
+        let next=Math.floor(nextRaw/BACK_STEP)*BACK_STEP;
+        next=clamp(next,0,maxTime);
+
+        // Si ya estamos muy cerca del objetivo final, vamos directamente a él.
+        if(video.currentTime-target <= BACK_STEP*1.15){
+          next=target;
+        }
+
+        if(Math.abs(video.currentTime-next) > 0.08){
+          try{ video.currentTime=next; }catch(_){}
+        }
       }
+
       chaseRaf=requestAnimationFrame(chaseTarget);
       return;
     }
@@ -152,7 +169,6 @@
       const p=video.play();
       if(p && typeof p.then==='function') await p;
 
-      // Esperamos a que el navegador haya presentado al menos un fotograma real.
       await new Promise(resolve=>{
         if('requestVideoFrameCallback' in video){
           video.requestVideoFrameCallback(()=>resolve());
@@ -166,7 +182,6 @@
       targetTime=getProgress()*video.duration;
       requestChase();
     }catch(err){
-      // En algún navegador móvil puede requerir gesto del usuario.
       console.warn('RSI: inicialización de vídeo pendiente de interacción',err);
     }finally{
       priming=false;
@@ -196,7 +211,6 @@
     requestRender();
   },{passive:true});
 
-  // Fallback si un móvil bloquea la primera reproducción automática.
   const userPrime=()=>primeVideo();
   addEventListener('touchstart',userPrime,{passive:true,once:true});
   addEventListener('pointerdown',userPrime,{passive:true,once:true});
@@ -212,7 +226,6 @@
       videoReady=true;
       targetTime=getProgress()*video.duration;
       requestRender();
-      // Intentamos preparar el decodificador en la primera carga, sin esperar al scroll.
       primeVideo();
     };
 
