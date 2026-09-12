@@ -17,13 +17,9 @@
   let activeIndex = -1;
   let raf = 0;
   let videoReady = false;
+  let videoPrimed = false;
+  let priming = false;
   let targetTime = 0;
-  let lastSeekAt = 0;
-
-  // Limitamos la frecuencia de seek para no saturar el decodificador,
-  // pero NO bloqueamos futuros seeks esperando un evento seeked.
-  const SEEK_INTERVAL = 45; // ms
-  const SEEK_EPSILON = 0.04;
 
   scenes.forEach((_,i)=>{
     const dot=document.createElement('span');
@@ -93,56 +89,77 @@
     card.classList.add('visible');
   }
 
-  function seekVideo(now = performance.now()){
-    if(!video || !videoReady) return;
-    if(video.readyState < 2) return;
+  function seekToTarget(){
+    if(!video || !videoReady || !videoPrimed) return;
     if(!Number.isFinite(video.duration) || video.duration<=0) return;
 
-    const t = clamp(targetTime,0,Math.max(0,video.duration-0.001));
-    if(Math.abs(video.currentTime-t) <= SEEK_EPSILON) return;
-    if(now-lastSeekAt < SEEK_INTERVAL) return;
+    const t=clamp(targetTime,0,Math.max(0,video.duration-0.001));
+    if(Math.abs(video.currentTime-t) < 0.025) return;
 
-    lastSeekAt = now;
     try{
-      video.currentTime = t;
+      video.currentTime=t;
     }catch(err){
-      console.warn('RSI: seek de vídeo pendiente', err);
+      console.warn('RSI: no se pudo mover el vídeo al tiempo objetivo',err);
     }
   }
 
-  function syncVideo(p, now){
-    if(!video || !videoReady) return;
-    if(!Number.isFinite(video.duration) || video.duration<=0) return;
+  async function primeVideo(){
+    if(!video || !videoReady || videoPrimed || priming) return;
+    priming=true;
 
-    targetTime = clamp(p,0,1) * video.duration;
-    seekVideo(now);
+    try{
+      video.muted=true;
+      video.playsInline=true;
+      await video.play();
+      video.pause();
+      videoPrimed=true;
+      targetTime=getProgress()*video.duration;
+      seekToTarget();
+    }catch(err){
+      console.warn('RSI: el navegador no permitió inicializar el vídeo todavía',err);
+    }finally{
+      priming=false;
+    }
   }
 
-  function render(now = performance.now()){
+  function render(){
     raf=0;
     const p=getProgress();
 
     progress.style.width=(p*100)+'%';
     cue.style.opacity=String(clamp(1-p*9,0,1));
     renderCard(p);
-    syncVideo(p,now);
+
+    if(video && videoReady && Number.isFinite(video.duration) && video.duration>0){
+      targetTime=p*video.duration;
+      seekToTarget();
+    }
   }
 
   function requestRender(){
     if(!raf) raf=requestAnimationFrame(render);
   }
 
-  addEventListener('scroll',requestRender,{passive:true});
+  function handleUserScroll(){
+    primeVideo();
+    requestRender();
+  }
+
+  addEventListener('scroll',handleUserScroll,{passive:true});
+  addEventListener('wheel',primeVideo,{passive:true,once:true});
+  addEventListener('touchstart',primeVideo,{passive:true,once:true});
+  addEventListener('pointerdown',primeVideo,{passive:true,once:true});
+
   addEventListener('resize',()=>{
     activeIndex=-1;
     requestRender();
   },{passive:true});
 
   if(video){
-    video.pause();
+    video.muted=true;
     video.preload='auto';
+    video.pause();
 
-    // loadeddata confirma que ya existe al menos un fotograma decodificable.
     const markReady=()=>{
       if(!Number.isFinite(video.duration) || video.duration<=0) return;
       videoReady=true;
@@ -150,21 +167,17 @@
       requestRender();
     };
 
+    video.addEventListener('loadedmetadata',markReady);
     video.addEventListener('loadeddata',markReady);
     video.addEventListener('canplay',markReady);
-    video.addEventListener('durationchange',()=>{
-      if(Number.isFinite(video.duration) && video.duration>0) markReady();
-    });
     video.addEventListener('error',()=>{
-      console.error('RSI: no se pudo cargar el vídeo del recorrido.', video.error);
+      console.error('RSI: no se pudo cargar el vídeo del recorrido.',video.error);
     });
 
-    // Si el navegador ya había cargado el vídeo antes de ejecutar el script.
     if(video.readyState>=2 && Number.isFinite(video.duration) && video.duration>0){
       markReady();
     }else{
-      // Reafirma la carga del MP4 sin reproducirlo.
-      try{ video.load(); }catch(_){}
+      try{video.load();}catch(_){}
     }
   }
 
